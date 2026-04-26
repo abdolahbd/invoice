@@ -1,0 +1,10 @@
+
+# Colab Mini Cloud IDE
+node_modules/
+build/
+dist/
+.cache/
+.env
+*.log
+saved-projects/
+__pycache__/

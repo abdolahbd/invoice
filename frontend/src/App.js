@@ -231,7 +231,7 @@ function App() {
     return (
       <div style={styles.authContainer}>
         <div style={styles.authCard}>
-          <h2 style={{ textAlign: "center", marginBottom: "30px", color: "#1e293b" }}>ExtractJS SaaS</h2>
+          <h2 style={{ textAlign: "center", marginBottom: "30px", color: "#1e293b" }}>777 ExtractJS SaaS</h2>
           <input type="email" placeholder="Email Address" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} style={styles.input} />
           <input type="password" placeholder="Password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} style={styles.input} />
           <button onClick={handleManualAuth} style={{ ...styles.button, width: "100%", padding: "12px", marginBottom: "15px" }}>
