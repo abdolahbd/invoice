@@ -41,7 +41,7 @@ CREATE TABLE `files` (
 
 LOCK TABLES `files` WRITE;
 /*!40000 ALTER TABLE `files` DISABLE KEYS */;
-INSERT INTO `files` VALUES ('17c667159dfafd7d7c3d82c3c2ce62ee','abdolahbd@gmail.com','000.pdf','/content/mini-cloud-ide/backend/storage/uploads/5a13560c4d698aff5f8b9b3541de33aa','application/pdf',29740,1,'2026-04-26 17:03:31'),('1aba7788b3f010968bf5ac7d055ca622','abdolahbd@gmail.com','000.pdf','/content/mini-cloud-ide/backend/storage/uploads/79c23e55f97e394ca7b869946a716728','application/pdf',29740,1,'2026-04-26 17:14:16'),('852efb6c2ed9d7f8b2d58192b7cac630','abdolahbd@gmail.com','000.pdf','/content/mini-cloud-ide/backend/storage/uploads/8cb2ba480fc20cb4bf9f13da69d30b8c','application/pdf',29740,1,'2026-04-26 17:24:50'),('fb4e1ddd9dc7ad8b80258218f7aba850','abdolahbd@gmail.com','000.pdf','/content/mini-cloud-ide/backend/storage/uploads/6e119e2b0a582cedf20ce517ea3378b4','application/pdf',29740,1,'2026-04-26 17:16:57');
+INSERT INTO `files` VALUES ('921a02fbba5add7ce5a66f3b0608dcba','abdollahbd@gmail.com','000.pdf','/content/mini-cloud-ide/backend/storage/uploads/91bd4e8e4e0c0c9140017a7f26b25522','application/pdf',29740,1,'2026-04-26 20:11:23'),('bf2140d263e1e357ab97d9b1418ab80d','abdollahbd@gmail.com','000.pdf','/content/mini-cloud-ide/backend/storage/uploads/5701a381b2e5d2478824ed18c44b192e','application/pdf',29740,1,'2026-04-26 20:11:44');
 /*!40000 ALTER TABLE `files` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -84,12 +84,11 @@ DROP TABLE IF EXISTS `notes`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `notes` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `title` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `content` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `title` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `content` text COLLATE utf8mb4_unicode_ci,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  `image_url` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -98,7 +97,7 @@ CREATE TABLE `notes` (
 
 LOCK TABLES `notes` WRITE;
 /*!40000 ALTER TABLE `notes` DISABLE KEYS */;
-INSERT INTO `notes` VALUES (1,'Welcome note','This row was created from Google Colab MySQL.','2026-04-26 14:57:11',NULL),(2,'u','fgh','2026-04-26 15:01:34',NULL),(3,'jiu','fgh','2026-04-26 15:09:43','/uploads/1777216183132-i.jpg'),(4,'jjj','fhgjhjk','2026-04-26 16:11:15','/uploads/1777219875573-router.png');
+INSERT INTO `notes` VALUES (1,'Welcome note','This row was created from Google Colab MySQL.','2026-04-26 20:00:35');
 /*!40000 ALTER TABLE `notes` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -162,7 +161,7 @@ CREATE TABLE `users` (
 
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
-INSERT INTO `users` VALUES (1,'abdolahbd@gmail.com','$2b$10$J1ewNzLgxOayD88odZL0Ruo3fUKBzxCnYT8wLfRCgBzUVlJZMdfi.',NULL,NULL,'English','free',4,118960,NULL,NULL,'free','2026-04-26 17:02:23');
+INSERT INTO `users` VALUES (1,'abdollahbd@gmail.com','$2b$10$feQ0b0zCgEh3FDW.tkU64emd5TiML6z9VOwrrMDacfvYNrUtBbJ.a',NULL,NULL,'English','free',2,59480,NULL,NULL,'free','2026-04-26 20:11:04');
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -175,4 +174,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-04-26 17:25:05
+-- Dump completed on 2026-04-26 20:12:36
