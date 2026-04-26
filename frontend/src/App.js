@@ -64,6 +64,7 @@ function App() {
   const [accLang, setAccLang] = useState("English");
 
   const activeJob = useMemo(() => jobs.find((j) => ["pending", "processing"].includes(j.status)), [jobs]);
+  const latestFailedJob = useMemo(() => jobs.find((j) => j.status === "failed"), [jobs]);
 
   const fetchMe = async () => {
     const res = await fetch(`${API}/api/me`, { headers: getHeaders(token, false) });
@@ -459,6 +460,18 @@ function App() {
                   <div style={{ width: `${progressPct}%`, height: "100%", background: "#3b82f6" }}></div>
                 </div>
                 <div style={{ marginTop: "8px", color: "#64748b" }}>Current: {activeJob.current_item_name || "Waiting"}</div>
+              </div>
+            )}
+
+            {latestFailedJob && (
+              <div style={{ ...styles.card, borderLeft: "4px solid #ef4444" }}>
+                <h3 style={styles.cardTitle}>Last Extraction Failed</h3>
+                <div style={{ fontSize: "14px", color: "#991b1b", marginBottom: "8px" }}>
+                  {latestFailedJob.error_text || "The extraction job failed before results could be generated."}
+                </div>
+                <div style={{ fontSize: "13px", color: "#64748b" }}>
+                  Job ID: {latestFailedJob.id}
+                </div>
               </div>
             )}
 
