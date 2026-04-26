@@ -308,7 +308,7 @@ async function initDB() {
       stripe_subscription_id VARCHAR(191),
       subscription_status VARCHAR(50) DEFAULT 'free',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
   await db.query(`
@@ -318,7 +318,7 @@ async function initDB() {
       name VARCHAR(255) NOT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
   await db.query(`
@@ -333,7 +333,7 @@ async function initDB() {
       size_bytes BIGINT DEFAULT 0,
       pages INT DEFAULT 1,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
   await db.query(`
@@ -352,7 +352,7 @@ async function initDB() {
       error_text TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    )
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
   await db.query(`ALTER TABLE users ADD COLUMN password_hash VARCHAR(255)`).catch(() => {});
@@ -367,6 +367,10 @@ async function initDB() {
   await db.query(`ALTER TABLE jobs ADD COLUMN total_items INT DEFAULT 0`).catch(() => {});
   await db.query(`ALTER TABLE jobs ADD COLUMN processed_items INT DEFAULT 0`).catch(() => {});
   await db.query(`ALTER TABLE jobs ADD COLUMN current_item_name VARCHAR(255)`).catch(() => {});
+  await db.query(`ALTER TABLE users CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`).catch(() => {});
+  await db.query(`ALTER TABLE workspaces CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`).catch(() => {});
+  await db.query(`ALTER TABLE files CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`).catch(() => {});
+  await db.query(`ALTER TABLE jobs CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`).catch(() => {});
 
   await db.query(
     `
