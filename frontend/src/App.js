@@ -1,20 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
-// ⚠️ IMPORTANT: Update this if your ngrok URL changesiii
 const API = "";
-const GOOGLE_CLIENT_ID = "321882385705-dvfkpv8ej4ib7pedtcgg9oism8p911uj.apps.googleusercontent.com"; // Replace with your Google Client ID
+const GOOGLE_CLIENT_ID = "321882385705-dvfkpv8ej4ib7pedtcgg9oism8p911uj.apps.googleusercontent.com";
 
-// Helper to easily attach default headers (auth + ngrok bypass)
 const getHeaders = (token, isJson = true) => {
-  const headers = {
-    "ngrok-skip-browser-warning": "true",
-  };
+  const headers = { "ngrok-skip-browser-warning": "true" };
   if (isJson) headers["Content-Type"] = "application/json";
   if (token) headers["Authorization"] = `Bearer ${token}`;
   return headers;
 };
 
-// --- INLINE STYLES ---
 const styles = {
   appContainer: { display: "flex", minHeight: "100vh", fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif", backgroundColor: "#f8fafc", color: "#334155" },
   sidebar: { width: "260px", backgroundColor: "#1e293b", color: "#f8fafc", display: "flex", flexDirection: "column", padding: "20px 0" },
@@ -41,43 +36,99 @@ const styles = {
 };
 
 function App() {
-  // Auth State
   const [token, setToken] = useState(localStorage.getItem("token") || null);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [isLogin, setIsLogin] = useState(true);
 
-  // App Navigation & User State
   const [user, setUser] = useState(null);
-  const [activeTab, setActiveTab] = useState("workspaces"); // analytics, workspaces, account, billing
+  const [activeTab, setActiveTab] = useState("workspaces");
   const [history, setHistory] = useState([]);
 
-  // Workspaces State
-  const [file, setFile] = useState(null);
-  const [fields, setFields] = useState("");
+  const [workspaces, setWorkspaces] = useState([]);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
+  const [newWorkspaceName, setNewWorkspaceName] = useState("");
+
+  const [files, setFiles] = useState([]);
+  const [fieldMode, setFieldMode] = useState("auto");
+  const [manualFields, setManualFields] = useState("");
+  const [autoFields, setAutoFields] = useState([]);
+  const [jobs, setJobs] = useState([]);
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingColumns, setLoadingColumns] = useState(false);
 
-  // Account State
   const [accEmail, setAccEmail] = useState("");
   const [accPassword, setAccPassword] = useState("");
   const [accLang, setAccLang] = useState("English");
 
-  // --- Auth Logic ---
+  const activeJob = useMemo(() => jobs.find((j) => ["pending", "processing"].includes(j.status)), [jobs]);
+
+  const fetchMe = async () => {
+    const res = await fetch(`${API}/api/me`, { headers: getHeaders(token, false) });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || "Failed user");
+    setUser(json.user);
+    setAccEmail(json.user.email);
+  };
+
+  const fetchWorkspaces = async (keepSelection = true) => {
+    const res = await fetch(`${API}/api/workspaces`, { headers: getHeaders(token, false) });
+    const json = await res.json();
+    if (!json.success) return;
+    setWorkspaces(json.workspaces || []);
+
+    if ((!keepSelection || !selectedWorkspaceId) && json.workspaces?.length) {
+      setSelectedWorkspaceId(json.workspaces[0].id);
+    } else if (selectedWorkspaceId && !json.workspaces.find((w) => w.id === selectedWorkspaceId)) {
+      setSelectedWorkspaceId(json.workspaces[0]?.id || "");
+    }
+  };
+
+  const fetchJobs = async (workspaceId) => {
+    if (!workspaceId) return;
+    const res = await fetch(`${API}/api/workspaces/${workspaceId}/jobs`, { headers: getHeaders(token, false) });
+    const json = await res.json();
+    if (!json.success) return;
+    setJobs(json.jobs || []);
+    const doneJob = (json.jobs || []).find((j) => j.status === "done" && j.result_json);
+    if (doneJob?.result_json) {
+      const rows = typeof doneJob.result_json === "string" ? JSON.parse(doneJob.result_json) : doneJob.result_json;
+      setData(Array.isArray(rows) ? rows : []);
+    } else {
+      setData([]);
+    }
+  };
+
   useEffect(() => {
-    if (token) {
-      fetch(`${API}/api/me`, { headers: getHeaders(token, false) })
+    if (!token) return;
+    fetchMe().catch(() => logout());
+    fetchWorkspaces(false).catch(() => {});
+  }, [token]);
+
+  useEffect(() => {
+    if (!token || !selectedWorkspaceId) return;
+    fetchJobs(selectedWorkspaceId).catch(() => {});
+  }, [token, selectedWorkspaceId]);
+
+  useEffect(() => {
+    if (!token || !activeJob || !selectedWorkspaceId) return;
+    const interval = setInterval(() => {
+      fetchJobs(selectedWorkspaceId).catch(() => {});
+    }, 1500);
+    return () => clearInterval(interval);
+  }, [token, activeJob, selectedWorkspaceId]);
+
+  useEffect(() => {
+    if (activeTab === "billing" && token) {
+      fetch(`${API}/api/billing/history`, { headers: getHeaders(token, false) })
         .then((res) => res.json())
         .then((json) => {
-          if (!json.success) logout();
-          else {
-            setUser(json.user);
-            setAccEmail(json.user.email);
-          }
+          if (json.success) setHistory(json.history || []);
         })
-        .catch((err) => console.error("Failed to fetch user:", err));
+        .catch(() => {});
     }
-  }, [token]);
+  }, [activeTab, token]);
 
   useEffect(() => {
     if (!token) {
@@ -88,22 +139,16 @@ function App() {
       document.body.appendChild(script);
 
       window.handleCredentialResponse = async (response) => {
-        try {
-          const res = await fetch(`${API}/api/auth/google`, {
-            method: "POST",
-            headers: getHeaders(null, true),
-            body: JSON.stringify({ token: response.credential }),
-          });
-          const json = await res.json();
-          if (json.success) {
-            setToken(json.token);
-            localStorage.setItem("token", json.token);
-          } else {
-            alert(json.error || "Google auth failed");
-          }
-        } catch (err) {
-          alert("Network error connecting to backend API.");
-        }
+        const res = await fetch(`${API}/api/auth/google`, {
+          method: "POST",
+          headers: getHeaders(null, true),
+          body: JSON.stringify({ token: response.credential }),
+        });
+        const json = await res.json();
+        if (json.success) {
+          setToken(json.token);
+          localStorage.setItem("token", json.token);
+        } else alert(json.error || "Google auth failed");
       };
 
       return () => {
@@ -113,36 +158,18 @@ function App() {
     }
   }, [token]);
 
-  // Fetch Billing History
-  useEffect(() => {
-    if (activeTab === "billing" && token) {
-      fetch(`${API}/api/billing/history`, { headers: getHeaders(token, false) })
-        .then((res) => res.json())
-        .then((json) => {
-          if (json.success) setHistory(json.history || []);
-        })
-        .catch((err) => console.error("Failed to fetch history:", err));
-    }
-  }, [activeTab, token]);
-
   const handleManualAuth = async () => {
-    try {
-      const endpoint = isLogin ? "/api/auth/login" : "/api/auth/register";
-      const res = await fetch(`${API}${endpoint}`, {
-        method: "POST",
-        headers: getHeaders(null, true),
-        body: JSON.stringify({ email: authEmail, password: authPassword }),
-      });
-      const json = await res.json();
-      if (json.success) {
-        setToken(json.token);
-        localStorage.setItem("token", json.token);
-      } else {
-        alert(json.error || "Authentication failed");
-      }
-    } catch (err) {
-      alert("Network Error: Could not connect to the backend.");
-    }
+    const endpoint = isLogin ? "/api/auth/login" : "/api/auth/register";
+    const res = await fetch(`${API}${endpoint}`, {
+      method: "POST",
+      headers: getHeaders(null, true),
+      body: JSON.stringify({ email: authEmail, password: authPassword }),
+    });
+    const json = await res.json();
+    if (json.success) {
+      setToken(json.token);
+      localStorage.setItem("token", json.token);
+    } else alert(json.error || "Authentication failed");
   };
 
   const logout = () => {
@@ -152,80 +179,124 @@ function App() {
     setActiveTab("workspaces");
   };
 
-  // --- Workspaces Logic ---
-  const upload = async () => {
-    if (!file || !fields) return alert("Please select a file and enter fields.");
-    setLoading(true);
+  const createWorkspace = async () => {
+    if (!newWorkspaceName.trim()) return alert("Workspace name is required");
+    const res = await fetch(`${API}/api/workspaces`, {
+      method: "POST",
+      headers: getHeaders(token, true),
+      body: JSON.stringify({ name: newWorkspaceName.trim() }),
+    });
+    const json = await res.json();
+    if (!json.success) return alert(json.error || "Failed to create workspace");
+    setNewWorkspaceName("");
+    await fetchWorkspaces(false);
+    if (json.workspace?.id) setSelectedWorkspaceId(json.workspace.id);
+    await fetchMe().catch(() => {});
+  };
+
+  const suggestColumns = async (selectedFiles) => {
+    if (!selectedFiles?.length) {
+      setAutoFields([]);
+      return;
+    }
+
+    setLoadingColumns(true);
     try {
       const form = new FormData();
-      form.append("files", file);
-      form.append("fields", JSON.stringify(fields.split(",")));
-
-      const res = await fetch(`${API}/api/upload`, {
+      selectedFiles.forEach((file) => form.append("files", file));
+      const res = await fetch(`${API}/api/columns/suggest`, {
         method: "POST",
         headers: getHeaders(token, false),
         body: form,
       });
+      const json = await res.json();
+      if (json.success && Array.isArray(json.columns)) setAutoFields(json.columns);
+      else setAutoFields([]);
+    } catch {
+      setAutoFields([]);
+    }
+    setLoadingColumns(false);
+  };
 
+  const runExtraction = async () => {
+    if (!selectedWorkspaceId) return alert("Please select workspace");
+    if (!files.length) return alert("Please choose files");
+
+    const finalFields = fieldMode === "auto" ? autoFields : manualFields.split(",").map((f) => f.trim()).filter(Boolean);
+    if (!finalFields.length) return alert("No columns available. Wait for auto columns or enter manual fields.");
+
+    setLoading(true);
+    try {
+      const form = new FormData();
+      files.forEach((file) => form.append("files", file));
+      form.append("workspace_id", selectedWorkspaceId);
+      form.append("fields_mode", fieldMode);
+      form.append("fields", JSON.stringify(finalFields));
+      form.append("organization", "one_table");
+
+      const res = await fetch(`${API}/api/jobs`, {
+        method: "POST",
+        headers: getHeaders(token, false),
+        body: form,
+      });
       const json = await res.json();
       if (!json.success) {
-        alert(json.error || "Upload failed");
-        setData([]);
+        alert(json.error || "Failed to start job");
       } else {
-        setData(Array.isArray(json.data) ? json.data : []);
-        // Refresh user to update usage stats
-        fetch(`${API}/api/me`, { headers: getHeaders(token, false) })
-          .then((r) => r.json())
-          .then((j) => { if(j.success) setUser(j.user); });
+        await fetchJobs(selectedWorkspaceId);
+        await fetchMe().catch(() => {});
       }
-    } catch (err) {
-      alert("Network Error during upload.");
+    } catch {
+      alert("Network Error during extraction start.");
     }
     setLoading(false);
   };
 
   const exportExcel = async () => {
-    try {
-      const res = await fetch(`${API}/api/export`, {
-        method: "POST",
-        headers: getHeaders(token, true),
-        body: JSON.stringify({ data }),
-      });
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "extraction_data.xlsx";
-      a.click();
-    } catch (err) {
-      alert("Network Error while exporting.");
-    }
+    const latestDoneJob = jobs.find((j) => j.status === "done");
+    if (!latestDoneJob?.id) return alert("No completed job found");
+
+    const res = await fetch(`${API}/api/export`, {
+      method: "POST",
+      headers: getHeaders(token, true),
+      body: JSON.stringify({ job_id: latestDoneJob.id }),
+    });
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "extraction_data.xlsx";
+    a.click();
   };
 
-  // --- Billing Logic ---
   const subscribe = async (price) => {
-    try {
-      const res = await fetch(`${API}/api/create-checkout`, {
-        method: "POST",
-        headers: getHeaders(token, true),
-        body: JSON.stringify({ plan_code: price }),
-      });
-      const json = await res.json();
-      if (json.url) window.location = json.url;
-      else alert(json.error);
-    } catch (err) {
-      alert("Network Error: Could not start checkout.");
+    const res = await fetch(`${API}/api/create-checkout`, {
+      method: "POST",
+      headers: getHeaders(token, true),
+      body: JSON.stringify({ plan_code: price }),
+    });
+    const json = await res.json();
+    if (json.url) window.location = json.url;
+    else alert(json.error);
+  };
+
+  const handleUpdateAccount = async () => {
+    const res = await fetch(`${API}/api/account/update`, {
+      method: "PUT",
+      headers: getHeaders(token, true),
+      body: JSON.stringify({ email: accEmail, password: accPassword, language: accLang }),
+    });
+    const json = await res.json();
+    if (!json.success) return alert(json.error || "Failed update");
+    if (json.token) {
+      setToken(json.token);
+      localStorage.setItem("token", json.token);
     }
+    setAccPassword("");
+    alert("Account updated");
   };
 
-  // --- Account Logic ---
-  const handleUpdateAccount = () => {
-    // Note: This is UI-only simulation since backend doesn't have an update endpoint yet.
-    alert(`Account preferences updated locally!\nEmail: ${accEmail}\nLanguage: ${accLang}\n(Note: Requires backend /api/account/update endpoint to persist)`);
-    setAccPassword(""); // Clear password field for security
-  };
-
-  // --- UI Renders ---
+  const progressPct = activeJob ? Math.round((Number(activeJob.processed_items || 0) / Math.max(1, Number(activeJob.total_items || 1))) * 100) : 0;
 
   if (!token) {
     return (
@@ -234,12 +305,8 @@ function App() {
           <h2 style={{ textAlign: "center", marginBottom: "30px", color: "#1e293b" }}>555 ExtractJS SaaS</h2>
           <input type="email" placeholder="Email Address" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} style={styles.input} />
           <input type="password" placeholder="Password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} style={styles.input} />
-          <button onClick={handleManualAuth} style={{ ...styles.button, width: "100%", padding: "12px", marginBottom: "15px" }}>
-            {isLogin ? "Sign In" : "Create Account"}
-          </button>
-          <p onClick={() => setIsLogin(!isLogin)} style={{ color: "#3b82f6", cursor: "pointer", textAlign: "center", fontSize: "14px", marginBottom: "25px" }}>
-            {isLogin ? "Need an account? Register" : "Already have an account? Login"}
-          </p>
+          <button onClick={handleManualAuth} style={{ ...styles.button, width: "100%", padding: "12px", marginBottom: "15px" }}>{isLogin ? "Sign In" : "Create Account"}</button>
+          <p onClick={() => setIsLogin(!isLogin)} style={{ color: "#3b82f6", cursor: "pointer", textAlign: "center", fontSize: "14px", marginBottom: "25px" }}>{isLogin ? "Need an account? Register" : "Already have an account? Login"}</p>
           <div style={{ textAlign: "center", borderTop: "1px solid #e2e8f0", paddingTop: "25px" }}>
             <div id="g_id_onload" data-client_id={GOOGLE_CLIENT_ID} data-context="signin" data-ux_mode="popup" data-callback="handleCredentialResponse" data-auto_prompt="false"></div>
             <div className="g_id_signin" data-type="standard" data-shape="rectangular" data-theme="outline" data-text="signin_with" data-size="large" data-logo_alignment="center"></div>
@@ -251,103 +318,102 @@ function App() {
 
   return (
     <div style={styles.appContainer}>
-      {/* Sidebar */}
       <div style={styles.sidebar}>
         <div style={styles.sidebarTitle}>ExtractJS SaaS</div>
-        <div style={activeTab === "analytics" ? styles.navItemActive : styles.navItem} onClick={() => setActiveTab("analytics")}>
-          📊 Analytics
-        </div>
-        <div style={activeTab === "workspaces" ? styles.navItemActive : styles.navItem} onClick={() => setActiveTab("workspaces")}>
-          📁 Workspaces
-        </div>
-        <div style={activeTab === "account" ? styles.navItemActive : styles.navItem} onClick={() => setActiveTab("account")}>
-          ⚙️ Account Settings
-        </div>
-        <div style={activeTab === "billing" ? styles.navItemActive : styles.navItem} onClick={() => setActiveTab("billing")}>
-          💳 Billing & Plans
-        </div>
+        <div style={activeTab === "analytics" ? styles.navItemActive : styles.navItem} onClick={() => setActiveTab("analytics")}>📊 Analytics</div>
+        <div style={activeTab === "workspaces" ? styles.navItemActive : styles.navItem} onClick={() => setActiveTab("workspaces")}>📁 Workspaces</div>
+        <div style={activeTab === "account" ? styles.navItemActive : styles.navItem} onClick={() => setActiveTab("account")}>⚙️ Account Settings</div>
+        <div style={activeTab === "billing" ? styles.navItemActive : styles.navItem} onClick={() => setActiveTab("billing")}>💳 Billing & Plans</div>
         <div style={{ flex: 1 }}></div>
-        <div style={{ ...styles.navItem, color: "#f87171" }} onClick={logout}>
-          🚪 Logout
-        </div>
+        <div style={{ ...styles.navItem, color: "#f87171" }} onClick={logout}>🚪 Logout</div>
       </div>
 
-      {/* Main Content Area */}
       <div style={styles.mainContent}>
         <div style={styles.header}>
           <h2>{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}</h2>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <span style={{ fontSize: "14px", color: "#64748b" }}>Logged in as: <strong>{user?.email}</strong></span>
-            <span style={{ ...styles.badge, backgroundColor: user?.plan_code === "free" ? "#e2e8f0" : "#dcfce3", color: user?.plan_code === "free" ? "#475569" : "#166534" }}>
-              Plan: {user?.plan_code?.toUpperCase()}
-            </span>
+            <span style={{ ...styles.badge, backgroundColor: user?.plan_code === "free" ? "#e2e8f0" : "#dcfce3", color: user?.plan_code === "free" ? "#475569" : "#166534" }}>Plan: {user?.plan_code?.toUpperCase()}</span>
           </div>
         </div>
 
-        {/* --- TAB: ANALYTICS --- */}
         {activeTab === "analytics" && (
-          <div>
-            <div style={styles.statBoxContainer}>
-              <div style={styles.statBox}>
-                <div style={{ color: "#64748b", fontSize: "14px" }}>Total Pages Extracted</div>
-                <div style={styles.statNumber}>{user?.usage_pages || 0}</div>
-              </div>
-              <div style={styles.statBox}>
-                <div style={{ color: "#64748b", fontSize: "14px" }}>Storage Used</div>
-                <div style={styles.statNumber}>{((user?.storage_used_bytes || 0) / (1024 * 1024)).toFixed(2)} MB</div>
-              </div>
-              <div style={styles.statBox}>
-                <div style={{ color: "#64748b", fontSize: "14px" }}>Active Workspaces</div>
-                <div style={styles.statNumber}>1</div>
-              </div>
-            </div>
+          <div style={styles.statBoxContainer}>
+            <div style={styles.statBox}><div style={{ color: "#64748b", fontSize: "14px" }}>Total Pages Extracted</div><div style={styles.statNumber}>{user?.usage_pages || 0}</div></div>
+            <div style={styles.statBox}><div style={{ color: "#64748b", fontSize: "14px" }}>Storage Used</div><div style={styles.statNumber}>{((user?.storage_used_bytes || 0) / (1024 * 1024)).toFixed(2)} MB</div></div>
+            <div style={styles.statBox}><div style={{ color: "#64748b", fontSize: "14px" }}>Active Workspaces</div><div style={styles.statNumber}>{user?.workspace_count || 0}</div></div>
           </div>
         )}
 
-        {/* --- TAB: WORKSPACES --- */}
         {activeTab === "workspaces" && (
           <div>
             <div style={styles.card}>
-              <h3 style={styles.cardTitle}>Data Extraction Workspace</h3>
-              <p style={{ fontSize: "14px", color: "#64748b", marginBottom: "15px" }}>Upload a PDF or document and define the columns you want to extract.</p>
-              
-              <label style={{ fontSize: "14px", fontWeight: "bold", display: "block", marginBottom: "5px" }}>1. Select File</label>
-              <input type="file" onChange={(e) => setFile(e.target.files[0])} style={styles.input} />
-
-              <label style={{ fontSize: "14px", fontWeight: "bold", display: "block", marginBottom: "5px" }}>2. Define Columns (comma separated)</label>
-              <input placeholder="e.g. invoice_number, total_amount, date" value={fields} onChange={(e) => setFields(e.target.value)} style={styles.input} />
-
-              <div style={{ marginTop: "10px" }}>
-                <button onClick={upload} style={styles.button} disabled={loading}>
-                  {loading ? "Extracting..." : "▶ Run Extraction"}
-                </button>
-                {data.length > 0 && (
-                  <button onClick={exportExcel} style={styles.buttonSuccess}>📥 Export to Excel</button>
-                )}
+              <h3 style={styles.cardTitle}>Workspace Manager</h3>
+              <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "15px" }}>
+                <select value={selectedWorkspaceId} onChange={(e) => setSelectedWorkspaceId(e.target.value)} style={{ ...styles.input, marginBottom: 0 }}>
+                  {workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+                </select>
+              </div>
+              <div style={{ display: "flex", gap: "10px" }}>
+                <input placeholder="New workspace name" value={newWorkspaceName} onChange={(e) => setNewWorkspaceName(e.target.value)} style={{ ...styles.input, marginBottom: 0 }} />
+                <button onClick={createWorkspace} style={styles.buttonSecondary}>+ Create Workspace</button>
               </div>
             </div>
+
+            <div style={styles.card}>
+              <h3 style={styles.cardTitle}>Data Extraction Workspace</h3>
+              <p style={{ fontSize: "14px", color: "#64748b", marginBottom: "15px" }}>Upload PDFs/images. PDFs are processed page-by-page in backend queue.</p>
+
+              <label style={{ fontSize: "14px", fontWeight: "bold", display: "block", marginBottom: "5px" }}>1. Select Files</label>
+              <input type="file" multiple onChange={(e) => {
+                const selected = Array.from(e.target.files || []);
+                setFiles(selected);
+                setFieldMode("auto");
+                suggestColumns(selected);
+              }} style={styles.input} />
+
+              <label style={{ fontSize: "14px", fontWeight: "bold", display: "block", marginBottom: "8px" }}>2. Define Columns</label>
+              <div style={{ marginBottom: "12px" }}>
+                <label style={{ marginRight: "15px" }}>
+                  <input type="radio" checked={fieldMode === "auto"} onChange={() => setFieldMode("auto")} /> Automatic (default from first page)
+                </label>
+                <label>
+                  <input type="radio" checked={fieldMode === "manual"} onChange={() => setFieldMode("manual")} /> Manual (comma separated)
+                </label>
+              </div>
+
+              {fieldMode === "auto" ? (
+                <div style={{ ...styles.input, minHeight: "44px", background: "#f8fafc" }}>
+                  {loadingColumns ? "Detecting columns from first page..." : (autoFields.length ? autoFields.join(", ") : "No automatic columns yet.")}
+                </div>
+              ) : (
+                <input placeholder="e.g. invoice_number, total_amount, date" value={manualFields} onChange={(e) => setManualFields(e.target.value)} style={styles.input} />
+              )}
+
+              <button onClick={runExtraction} style={styles.button} disabled={loading || loadingColumns}>{loading ? "Starting..." : "▶ Run Extraction"}</button>
+              {jobs.find((j) => j.status === "done") && <button onClick={exportExcel} style={styles.buttonSuccess}>📥 Export to Excel</button>}
+            </div>
+
+            {activeJob && (
+              <div style={styles.card}>
+                <h3 style={styles.cardTitle}>Processing Progress</h3>
+                <div style={{ marginBottom: "8px" }}><strong>{progressPct}%</strong> ({activeJob.processed_items || 0}/{activeJob.total_items || 0} pages/files)</div>
+                <div style={{ height: "14px", background: "#e2e8f0", borderRadius: "999px", overflow: "hidden" }}>
+                  <div style={{ width: `${progressPct}%`, height: "100%", background: "#3b82f6" }}></div>
+                </div>
+                <div style={{ marginTop: "8px", color: "#64748b" }}>Current: {activeJob.current_item_name || "Waiting"}</div>
+              </div>
+            )}
 
             {data.length > 0 && (
               <div style={styles.card}>
                 <h3 style={styles.cardTitle}>Extraction Results</h3>
                 <div style={{ overflowX: "auto" }}>
                   <table style={styles.table}>
-                    <thead>
-                      <tr>
-                        {Object.keys(data[0]).map((k) => (
-                          <th key={k} style={styles.th}>{k}</th>
-                        ))}
-                      </tr>
-                    </thead>
+                    <thead><tr>{Object.keys(data[0]).map((k) => <th key={k} style={styles.th}>{k}</th>)}</tr></thead>
                     <tbody>
                       {data.map((row, i) => (
-                        <tr key={i}>
-                          {Object.values(row).map((v, j) => (
-                            <td key={j} style={styles.td}>
-                              {typeof v === "object" && v !== null ? JSON.stringify(v, null, 2) : String(v ?? "")}
-                            </td>
-                          ))}
-                        </tr>
+                        <tr key={i}>{Object.values(row).map((v, j) => <td key={j} style={styles.td}>{typeof v === "object" && v !== null ? JSON.stringify(v) : String(v ?? "")}</td>)}</tr>
                       ))}
                     </tbody>
                   </table>
@@ -357,61 +423,38 @@ function App() {
           </div>
         )}
 
-        {/* --- TAB: ACCOUNT SETTINGS --- */}
         {activeTab === "account" && (
           <div style={{ maxWidth: "600px" }}>
             <div style={styles.card}>
               <h3 style={styles.cardTitle}>Profile Information</h3>
-              
               <label style={{ fontSize: "14px", fontWeight: "bold", display: "block", marginBottom: "5px" }}>Email Address</label>
               <input type="email" value={accEmail} onChange={(e) => setAccEmail(e.target.value)} style={styles.input} />
-
               <label style={{ fontSize: "14px", fontWeight: "bold", display: "block", marginBottom: "5px" }}>New Password (leave blank to keep current)</label>
               <input type="password" placeholder="••••••••" value={accPassword} onChange={(e) => setAccPassword(e.target.value)} style={styles.input} />
-
               <label style={{ fontSize: "14px", fontWeight: "bold", display: "block", marginBottom: "5px" }}>Display Language</label>
               <select value={accLang} onChange={(e) => setAccLang(e.target.value)} style={styles.input}>
-                <option value="English">English</option>
-                <option value="French">French</option>
-                <option value="Spanish">Spanish</option>
-                <option value="German">German</option>
+                <option value="English">English</option><option value="French">French</option><option value="Spanish">Spanish</option><option value="German">German</option>
               </select>
-
               <button onClick={handleUpdateAccount} style={styles.button}>Save Changes</button>
             </div>
           </div>
         )}
 
-        {/* --- TAB: BILLING --- */}
         {activeTab === "billing" && (
           <div>
             <div style={styles.card}>
               <h3 style={styles.cardTitle}>Upgrade Plan</h3>
-              <p style={{ fontSize: "14px", color: "#64748b", marginBottom: "20px" }}>
-                You are currently on the <strong>{user?.plan_code?.toUpperCase()}</strong> plan. Select a new plan to upgrade your limits.
-              </p>
+              <p style={{ fontSize: "14px", color: "#64748b", marginBottom: "20px" }}>You are currently on the <strong>{user?.plan_code?.toUpperCase()}</strong> plan.</p>
               <div style={{ display: "flex", gap: "20px" }}>
                 <div style={{ ...styles.card, border: "1px solid #cbd5e1", flex: 1, boxShadow: "none" }}>
                   <h4 style={{ margin: "0 0 10px 0" }}>Starter Plan</h4>
-                  <p style={{ fontSize: "24px", fontWeight: "bold", color: "#0f172a", margin: "0 0 15px 0" }}>$20 <span style={{fontSize:"14px", color:"#64748b", fontWeight:"normal"}}>/mo</span></p>
-                  <ul style={{ fontSize: "14px", paddingLeft: "20px", color: "#475569", marginBottom: "20px" }}>
-                    <li>10,000 Pages extracted per month</li>
-                    <li>1GB Cloud Storage</li>
-                    <li>Standard Support</li>
-                  </ul>
-                  <button onClick={() => subscribe("starter")} style={{...styles.button, width: "100%"}}>Upgrade to Starter</button>
+                  <p style={{ fontSize: "24px", fontWeight: "bold", color: "#0f172a", margin: "0 0 15px 0" }}>$20 <span style={{ fontSize: "14px", color: "#64748b", fontWeight: "normal" }}>/mo</span></p>
+                  <button onClick={() => subscribe("starter")} style={{ ...styles.button, width: "100%" }}>Upgrade to Starter</button>
                 </div>
-                
-                <div style={{ ...styles.card, border: "2px solid #3b82f6", flex: 1, boxShadow: "none", position: "relative" }}>
-                  <div style={{ position: "absolute", top: "-12px", right: "20px", backgroundColor: "#3b82f6", color: "#fff", fontSize: "12px", padding: "4px 8px", borderRadius: "10px", fontWeight: "bold" }}>POPULAR</div>
+                <div style={{ ...styles.card, border: "2px solid #3b82f6", flex: 1, boxShadow: "none" }}>
                   <h4 style={{ margin: "0 0 10px 0" }}>Business Plan</h4>
-                  <p style={{ fontSize: "24px", fontWeight: "bold", color: "#0f172a", margin: "0 0 15px 0" }}>$50 <span style={{fontSize:"14px", color:"#64748b", fontWeight:"normal"}}>/mo</span></p>
-                  <ul style={{ fontSize: "14px", paddingLeft: "20px", color: "#475569", marginBottom: "20px" }}>
-                    <li>100,000 Pages extracted per month</li>
-                    <li>5GB Cloud Storage</li>
-                    <li>Priority Support</li>
-                  </ul>
-                  <button onClick={() => subscribe("business")} style={{...styles.buttonSuccess, width: "100%"}}>Upgrade to Business</button>
+                  <p style={{ fontSize: "24px", fontWeight: "bold", color: "#0f172a", margin: "0 0 15px 0" }}>$50 <span style={{ fontSize: "14px", color: "#64748b", fontWeight: "normal" }}>/mo</span></p>
+                  <button onClick={() => subscribe("business")} style={{ ...styles.buttonSuccess, width: "100%" }}>Upgrade to Business</button>
                 </div>
               </div>
             </div>
@@ -419,35 +462,16 @@ function App() {
             <div style={styles.card}>
               <h3 style={styles.cardTitle}>Payment History</h3>
               <table style={styles.table}>
-                <thead>
-                  <tr>
-                    <th style={styles.th}>Date</th>
-                    <th style={styles.th}>Amount</th>
-                    <th style={styles.th}>Status</th>
-                    <th style={styles.th}>Invoice</th>
-                  </tr>
-                </thead>
+                <thead><tr><th style={styles.th}>Date</th><th style={styles.th}>Amount</th><th style={styles.th}>Status</th><th style={styles.th}>Invoice</th></tr></thead>
                 <tbody>
-                  {history.length === 0 ? (
-                    <tr><td colSpan="4" style={{ ...styles.td, textAlign: "center" }}>No payment history found.</td></tr>
-                  ) : (
-                    history.map((inv) => (
-                      <tr key={inv.id}>
-                        <td style={styles.td}>{new Date(inv.created * 1000).toLocaleDateString()}</td>
-                        <td style={styles.td}>${(inv.amount_paid / 100).toFixed(2)}</td>
-                        <td style={styles.td}>
-                          <span style={{ ...styles.badge, backgroundColor: inv.status === "paid" ? "#dcfce3" : "#fee2e2", color: inv.status === "paid" ? "#166534" : "#991b1b" }}>
-                            {inv.status}
-                          </span>
-                        </td>
-                        <td style={styles.td}>
-                          {inv.hosted_invoice_url && (
-                            <a href={inv.hosted_invoice_url} target="_blank" rel="noreferrer" style={{ color: "#3b82f6", textDecoration: "none" }}>Download</a>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  )}
+                  {!history.length ? <tr><td colSpan="4" style={{ ...styles.td, textAlign: "center" }}>No payment history found.</td></tr> : history.map((inv) => (
+                    <tr key={inv.id}>
+                      <td style={styles.td}>{new Date(inv.created * 1000).toLocaleDateString()}</td>
+                      <td style={styles.td}>${(inv.amount_paid / 100).toFixed(2)}</td>
+                      <td style={styles.td}><span style={{ ...styles.badge, backgroundColor: inv.status === "paid" ? "#dcfce3" : "#fee2e2", color: inv.status === "paid" ? "#166534" : "#991b1b" }}>{inv.status}</span></td>
+                      <td style={styles.td}>{inv.hosted_invoice_url && <a href={inv.hosted_invoice_url} target="_blank" rel="noreferrer" style={{ color: "#3b82f6", textDecoration: "none" }}>Download</a>}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
