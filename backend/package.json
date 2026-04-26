@@ -1,0 +1,23 @@
+{
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon --watch . --ext js,json,env server.js"
+  },
+  "dependencies": {
+    "@thednp/dommatrix": "^3.0.4",
+    "axios": "^1.15.2",
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "exceljs": "^4.4.0",
+    "express": "^4.22.1",
+    "google-auth-library": "^10.6.2",
+    "jsonwebtoken": "^9.0.3",
+    "morgan": "^1.10.0",
+    "multer": "^2.1.1",
+    "mysql2": "^3.22.2",
+    "nodemon": "^3.1.14",
+    "pdf-parse": "^2.4.5",
+    "stripe": "^22.1.0"
+  }
+}

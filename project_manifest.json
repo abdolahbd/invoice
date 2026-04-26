@@ -1,0 +1,12 @@
+{
+  "name": "invoice",
+  "created_at": "2026-04-26 17:25:05",
+  "excluded": [
+    "node_modules",
+    "build",
+    "dist",
+    ".git",
+    ".cache"
+  ],
+  "database": "database.sql"
+}
