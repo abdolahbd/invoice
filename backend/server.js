@@ -44,6 +44,7 @@ const db = mysql.createPool({
   user: process.env.MYSQL_USER || "root",
   password: process.env.MYSQL_PASSWORD || "",
   database: process.env.MYSQL_DATABASE || "saas_db",
+  charset: "utf8mb4_unicode_ci",
   waitForConnections: true,
   connectionLimit: 10,
 });
@@ -116,6 +117,22 @@ function normalizeRows(data) {
   if (data.rows && Array.isArray(data.rows)) return data.rows;
   if (data.data && Array.isArray(data.data)) return data.data;
   if (typeof data === "object") return [data];
+  return [];
+}
+
+function parseFieldsInput(value) {
+  if (Array.isArray(value)) return value.map((field) => String(field).trim()).filter(Boolean);
+  if (value === null || value === undefined) return [];
+  if (typeof value === "string") {
+    const text = value.trim();
+    if (!text) return [];
+    try {
+      const parsed = JSON.parse(text);
+      return parseFieldsInput(parsed);
+    } catch {
+      return text.split(",").map((field) => field.trim()).filter(Boolean);
+    }
+  }
   return [];
 }
 
@@ -308,7 +325,7 @@ async function initDB() {
       stripe_subscription_id VARCHAR(191),
       subscription_status VARCHAR(50) DEFAULT 'free',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
   await db.query(`
@@ -318,7 +335,7 @@ async function initDB() {
       name VARCHAR(255) NOT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
   await db.query(`
@@ -333,7 +350,7 @@ async function initDB() {
       size_bytes BIGINT DEFAULT 0,
       pages INT DEFAULT 1,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
   await db.query(`
@@ -352,7 +369,7 @@ async function initDB() {
       error_text TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    )
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
   await db.query(`ALTER TABLE users ADD COLUMN password_hash VARCHAR(255)`).catch(() => {});
@@ -367,6 +384,10 @@ async function initDB() {
   await db.query(`ALTER TABLE jobs ADD COLUMN total_items INT DEFAULT 0`).catch(() => {});
   await db.query(`ALTER TABLE jobs ADD COLUMN processed_items INT DEFAULT 0`).catch(() => {});
   await db.query(`ALTER TABLE jobs ADD COLUMN current_item_name VARCHAR(255)`).catch(() => {});
+  await db.query(`ALTER TABLE users CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`).catch(() => {});
+  await db.query(`ALTER TABLE workspaces CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`).catch(() => {});
+  await db.query(`ALTER TABLE files CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`).catch(() => {});
+  await db.query(`ALTER TABLE jobs CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`).catch(() => {});
 
   await db.query(
     `
@@ -609,7 +630,7 @@ app.post("/api/upload", authenticateToken, upload.array("files", 20), async (req
   try {
     const email = req.user.email;
     const workspaceId = req.body.workspace_id;
-    const fields = JSON.parse(req.body.fields || "[]");
+    const fields = parseFieldsInput(req.body.fields);
     const organization = req.body.organization || "one_table";
 
     if (!workspaceId) return res.status(400).json({ success: false, error: "workspace_id is required" });
@@ -653,7 +674,7 @@ app.post("/api/jobs", authenticateToken, upload.array("files", 20), async (req, 
     const workspaceId = req.body.workspace_id;
     const organization = req.body.organization || "one_table";
     const fieldsMode = req.body.fields_mode || "auto";
-    const fields = JSON.parse(req.body.fields || "[]");
+    const fields = parseFieldsInput(req.body.fields);
 
     if (!workspaceId) return res.status(400).json({ success: false, error: "workspace_id is required" });
     if (!fields.length) return res.status(400).json({ success: false, error: "fields is required" });
@@ -724,7 +745,7 @@ async function processJob(jobId) {
       [jobId, job.user_email]
     );
 
-    const fields = JSON.parse(job.fields_json || "[]");
+    const fields = parseFieldsInput(job.fields_json);
     const organization = job.organization || "one_table";
     const finalResult = [];
     let processed = 0;

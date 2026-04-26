@@ -48,6 +48,7 @@ function App() {
   const [workspaces, setWorkspaces] = useState([]);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
+  const [workspaceError, setWorkspaceError] = useState("");
 
   const [files, setFiles] = useState([]);
   const [fieldMode, setFieldMode] = useState("auto");
@@ -63,6 +64,7 @@ function App() {
   const [accLang, setAccLang] = useState("English");
 
   const activeJob = useMemo(() => jobs.find((j) => ["pending", "processing"].includes(j.status)), [jobs]);
+  const latestFailedJob = useMemo(() => jobs.find((j) => j.status === "failed"), [jobs]);
 
   const fetchMe = async () => {
     const res = await fetch(`${API}/api/me`, { headers: getHeaders(token, false) });
@@ -73,9 +75,13 @@ function App() {
   };
 
   const fetchWorkspaces = async (keepSelection = true) => {
+    setWorkspaceError("");
     const res = await fetch(`${API}/api/workspaces`, { headers: getHeaders(token, false) });
     const json = await res.json();
-    if (!json.success) return;
+    if (!json.success) {
+      setWorkspaceError(json.error || "Failed to load workspaces");
+      return;
+    }
     setWorkspaces(json.workspaces || []);
 
     if ((!keepSelection || !selectedWorkspaceId) && json.workspaces?.length) {
@@ -103,8 +109,13 @@ function App() {
   useEffect(() => {
     if (!token) return;
     fetchMe().catch(() => logout());
-    fetchWorkspaces(false).catch(() => {});
+    fetchWorkspaces(false).catch(() => setWorkspaceError("Failed to load workspaces"));
   }, [token]);
+
+  useEffect(() => {
+    if (!token || activeTab !== "workspaces") return;
+    fetchWorkspaces(true).catch(() => setWorkspaceError("Failed to load workspaces"));
+  }, [activeTab, token]);
 
   useEffect(() => {
     if (!token || !selectedWorkspaceId) return;
@@ -350,10 +361,16 @@ function App() {
           <div>
             <div style={styles.card}>
               <h3 style={styles.cardTitle}>Workspace Manager</h3>
+              {workspaceError && (
+                <div style={{ fontSize: "13px", color: "#dc2626", marginBottom: "12px" }}>
+                  {workspaceError}
+                </div>
+              )}
               <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "15px" }}>
                 <select value={selectedWorkspaceId} onChange={(e) => setSelectedWorkspaceId(e.target.value)} style={{ ...styles.input, marginBottom: 0 }}>
                   {workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
                 </select>
+                <button onClick={() => fetchWorkspaces(true)} style={styles.buttonSecondary}>Refresh</button>
               </div>
               <div style={{ fontSize: "13px", color: "#64748b", marginBottom: "15px" }}>
                 {selectedWorkspace ? `Selected workspace: ${selectedWorkspace.name}` : "No workspace selected yet."}
@@ -443,6 +460,18 @@ function App() {
                   <div style={{ width: `${progressPct}%`, height: "100%", background: "#3b82f6" }}></div>
                 </div>
                 <div style={{ marginTop: "8px", color: "#64748b" }}>Current: {activeJob.current_item_name || "Waiting"}</div>
+              </div>
+            )}
+
+            {latestFailedJob && (
+              <div style={{ ...styles.card, borderLeft: "4px solid #ef4444" }}>
+                <h3 style={styles.cardTitle}>Last Extraction Failed</h3>
+                <div style={{ fontSize: "14px", color: "#991b1b", marginBottom: "8px" }}>
+                  {latestFailedJob.error_text || "The extraction job failed before results could be generated."}
+                </div>
+                <div style={{ fontSize: "13px", color: "#64748b" }}>
+                  Job ID: {latestFailedJob.id}
+                </div>
               </div>
             )}
 
