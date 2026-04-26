@@ -111,6 +111,35 @@ function cleanJsonText(text) {
   return text.replace(/```json/gi, "").replace(/```/g, "").trim();
 }
 
+function parseModelJson(text) {
+  const cleaned = cleanJsonText(String(text || ""));
+  if (!cleaned) throw new Error("Model returned empty response");
+
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const firstBrace = cleaned.indexOf("{");
+    const lastBrace = cleaned.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      const objectCandidate = cleaned.slice(firstBrace, lastBrace + 1);
+      try {
+        return JSON.parse(objectCandidate);
+      } catch {}
+    }
+
+    const firstBracket = cleaned.indexOf("[");
+    const lastBracket = cleaned.lastIndexOf("]");
+    if (firstBracket !== -1 && lastBracket > firstBracket) {
+      const arrayCandidate = cleaned.slice(firstBracket, lastBracket + 1);
+      try {
+        return JSON.parse(arrayCandidate);
+      } catch {}
+    }
+  }
+
+  throw new Error("Model returned invalid JSON format");
+}
+
 function normalizeRows(data) {
   if (!data) return [];
   if (Array.isArray(data)) return data;
@@ -239,7 +268,7 @@ Rules: Extract tables, preserve columns, use null, valid JSON.`;
   });
 
   const raw = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-  return JSON.parse(cleanJsonText(raw));
+  return parseModelJson(raw);
 }
 
 async function askGeminiColumnsFromFirstUnit(item) {
@@ -261,7 +290,7 @@ Rules: column names must be snake_case and unique.`;
   });
 
   const raw = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-  const parsed = JSON.parse(cleanJsonText(raw));
+  const parsed = parseModelJson(raw);
   return Array.isArray(parsed?.columns) ? parsed.columns.filter(Boolean) : [];
 }
 
