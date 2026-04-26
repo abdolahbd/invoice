@@ -44,6 +44,7 @@ const db = mysql.createPool({
   user: process.env.MYSQL_USER || "root",
   password: process.env.MYSQL_PASSWORD || "",
   database: process.env.MYSQL_DATABASE || "saas_db",
+  charset: "utf8mb4_unicode_ci",
   waitForConnections: true,
   connectionLimit: 10,
 });
