@@ -136,6 +136,33 @@ function parseFieldsInput(value) {
   return [];
 }
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function callGeminiWithRetry(payload, maxAttempts = 5) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await axios.post(url, payload);
+    } catch (err) {
+      const status = err?.response?.status;
+      const isRetryable = status === 429 || status === 503 || status === 500;
+      if (!isRetryable || attempt === maxAttempts) {
+        if (status === 429) {
+          throw new Error("Rate limit from AI provider (429). Please retry in about 1 minute.");
+        }
+        throw err;
+      }
+
+      const retryAfterHeader = Number(err?.response?.headers?.["retry-after"] || 0);
+      const retryAfterMs = Number.isFinite(retryAfterHeader) && retryAfterHeader > 0 ? retryAfterHeader * 1000 : 0;
+      const backoffMs = 1000 * 2 ** (attempt - 1);
+      const jitterMs = Math.floor(Math.random() * 300);
+      await sleep(Math.max(retryAfterMs, backoffMs + jitterMs));
+    }
+  }
+}
+
 function fileToGeminiPart(filePath, mimeType) {
   const base64 = fs.readFileSync(filePath).toString("base64");
   return { inline_data: { mime_type: mimeType, data: base64 } };
@@ -206,8 +233,7 @@ Rules: Extract tables, preserve columns, use null, valid JSON.`;
     parts.push({ text: utf8Text });
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
-  const response = await axios.post(url, {
+  const response = await callGeminiWithRetry({
     contents: [{ role: "user", parts }],
     generationConfig: { temperature: 0.1, responseMimeType: "application/json" },
   });
@@ -229,8 +255,7 @@ Rules: column names must be snake_case and unique.`;
     parts.push(fileToGeminiPart(item.sourcePath, item.mimeType));
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
-  const response = await axios.post(url, {
+  const response = await callGeminiWithRetry({
     contents: [{ role: "user", parts }],
     generationConfig: { temperature: 0.1, responseMimeType: "application/json" },
   });
