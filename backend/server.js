@@ -120,6 +120,22 @@ function normalizeRows(data) {
   return [];
 }
 
+function parseFieldsInput(value) {
+  if (Array.isArray(value)) return value.map((field) => String(field).trim()).filter(Boolean);
+  if (value === null || value === undefined) return [];
+  if (typeof value === "string") {
+    const text = value.trim();
+    if (!text) return [];
+    try {
+      const parsed = JSON.parse(text);
+      return parseFieldsInput(parsed);
+    } catch {
+      return text.split(",").map((field) => field.trim()).filter(Boolean);
+    }
+  }
+  return [];
+}
+
 function fileToGeminiPart(filePath, mimeType) {
   const base64 = fs.readFileSync(filePath).toString("base64");
   return { inline_data: { mime_type: mimeType, data: base64 } };
@@ -614,7 +630,7 @@ app.post("/api/upload", authenticateToken, upload.array("files", 20), async (req
   try {
     const email = req.user.email;
     const workspaceId = req.body.workspace_id;
-    const fields = JSON.parse(req.body.fields || "[]");
+    const fields = parseFieldsInput(req.body.fields);
     const organization = req.body.organization || "one_table";
 
     if (!workspaceId) return res.status(400).json({ success: false, error: "workspace_id is required" });
@@ -658,7 +674,7 @@ app.post("/api/jobs", authenticateToken, upload.array("files", 20), async (req, 
     const workspaceId = req.body.workspace_id;
     const organization = req.body.organization || "one_table";
     const fieldsMode = req.body.fields_mode || "auto";
-    const fields = JSON.parse(req.body.fields || "[]");
+    const fields = parseFieldsInput(req.body.fields);
 
     if (!workspaceId) return res.status(400).json({ success: false, error: "workspace_id is required" });
     if (!fields.length) return res.status(400).json({ success: false, error: "fields is required" });
@@ -729,7 +745,7 @@ async function processJob(jobId) {
       [jobId, job.user_email]
     );
 
-    const fields = JSON.parse(job.fields_json || "[]");
+    const fields = parseFieldsInput(job.fields_json);
     const organization = job.organization || "one_table";
     const finalResult = [];
     let processed = 0;
