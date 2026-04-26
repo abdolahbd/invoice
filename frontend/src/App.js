@@ -297,6 +297,7 @@ function App() {
   };
 
   const progressPct = activeJob ? Math.round((Number(activeJob.processed_items || 0) / Math.max(1, Number(activeJob.total_items || 1))) * 100) : 0;
+  const selectedWorkspace = workspaces.find((w) => w.id === selectedWorkspaceId) || null;
 
   if (!token) {
     return (
@@ -354,10 +355,50 @@ function App() {
                   {workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
                 </select>
               </div>
+              <div style={{ fontSize: "13px", color: "#64748b", marginBottom: "15px" }}>
+                {selectedWorkspace ? `Selected workspace: ${selectedWorkspace.name}` : "No workspace selected yet."}
+              </div>
               <div style={{ display: "flex", gap: "10px" }}>
                 <input placeholder="New workspace name" value={newWorkspaceName} onChange={(e) => setNewWorkspaceName(e.target.value)} style={{ ...styles.input, marginBottom: 0 }} />
                 <button onClick={createWorkspace} style={styles.buttonSecondary}>+ Create Workspace</button>
               </div>
+            </div>
+
+            <div style={styles.card}>
+              <h3 style={styles.cardTitle}>Created Workspaces</h3>
+              {!workspaces.length ? (
+                <p style={{ fontSize: "14px", color: "#64748b", margin: 0 }}>No workspaces found.</p>
+              ) : (
+                <div style={{ overflowX: "auto" }}>
+                  <table style={styles.table}>
+                    <thead>
+                      <tr>
+                        <th style={styles.th}>Name</th>
+                        <th style={styles.th}>Created</th>
+                        <th style={styles.th}>Jobs</th>
+                        <th style={styles.th}>Last Job Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {workspaces.map((workspace) => {
+                        const isSelected = workspace.id === selectedWorkspaceId;
+                        return (
+                          <tr
+                            key={workspace.id}
+                            style={{ backgroundColor: isSelected ? "#eff6ff" : "transparent", cursor: "pointer" }}
+                            onClick={() => setSelectedWorkspaceId(workspace.id)}
+                          >
+                            <td style={{ ...styles.td, fontWeight: isSelected ? "bold" : "normal" }}>{workspace.name}</td>
+                            <td style={styles.td}>{workspace.created_at ? new Date(workspace.created_at).toLocaleString() : "-"}</td>
+                            <td style={styles.td}>{workspace.jobs_count || 0}</td>
+                            <td style={styles.td}>{workspace.last_job_status || "No jobs yet"}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
 
             <div style={styles.card}>
